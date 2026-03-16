@@ -37,5 +37,4 @@ def inicio():
                            imagen=imagen_b64,
                            error=error,
                            prompt=prompt_usuario)
-if __name__ == "__main__":
-    app.run(debug=True)
+

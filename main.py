@@ -1,40 +1,35 @@
 from flask import Flask, render_template, request, jsonify
 import requests
-import base64
-import os
+from urllib.parse import quote
+
 app = Flask(__name__)
-HF_TOKEN = os.environ.get("HF_TOKEN", TOKEN )
-API_URL = "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0"
-def generar_imagen(prompt):
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "num_inference_steps": 30,
-            "guidance_scale": 7.5,
-        }
-    }
-    response = requests.post(API_URL, headers=headers, json=payload)
-    if response.status_code == 200:
-        # La respuesta es la imagen directamente en bytes
-        image_bytes = response.content
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-        return image_b64, None
-    elif response.status_code == 503:
-        return None, "El modelo está cargando, espera unos segundos e intenta de nuevo."
-    else:
-        return None, f"Error {response.status_code}: {response.text}"
-@app.route("/", methods=["GET", "POST"])
-def inicio():
-    imagen_b64 = None
-    error = None
-    prompt_usuario = ""
-    if request.method == "POST":
-        prompt_usuario = request.form.get("prompt_usuario", "")
-        if prompt_usuario:
-            imagen_b64, error = generar_imagen(prompt_usuario)
-    return render_template("index.html",
-                           imagen=imagen_b64,
-                           error=error,
-                           prompt=prompt_usuario)
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/generate", methods=["POST"])
+def generate():
+    data = request.get_json()
+    prompt = data.get("prompt", "").strip()
+
+    if not prompt:
+        return jsonify({"error": "El prompt no puede estar vacío"}), 400
+
+    encoded_prompt = quote(prompt)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=768&nologo=true"
+
+    try:
+        response = requests.get(image_url, timeout=30)
+        if response.status_code == 200:
+            return jsonify({"image_url": image_url})
+        else:
+            return jsonify({"error": "No se pudo generar la imagen"}), 500
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "La solicitud tardó demasiado, intenta de nuevo"}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(debug=True)
 
